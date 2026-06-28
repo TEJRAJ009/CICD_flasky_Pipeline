@@ -1,19 +1,20 @@
 version: 0.2
 
-env:
-  parameter-store:
-    SONAR_TOKEN: "/indira-aws-pipeline/sonar-token"
-
 phases:
-  install:
-    runtime-versions:
-      python: 3.11
-    commands:
-      - curl -sSLo /tmp/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-8.0.1.6346-linux-x64.zip
-      - unzip -q /tmp/sonar-scanner.zip -d /opt
   pre_build:
     commands:
-      - pip install -r requirements/docker.txt
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}"
+      - IMAGE_TAG="${IMAGE_TAG:0:7}"
   build:
     commands:
-      - /opt/sonar-scanner-8.0.1.6346-linux-x64/bin/sonar-scanner -Dsonar.projectKey=indira_aws_pipeline -Dsonar.sources=. -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.token=$SONAR_TOKEN -Dsonar.qualitygate.wait=true
+      - echo Building Docker image...
+      - docker build -t $ECR_REPO_NAME:$IMAGE_TAG .
+      - docker tag $ECR_REPO_NAME:$IMAGE_TAG $IMAGE_REPO_URI:$IMAGE_TAG
+      - docker tag $ECR_REPO_NAME:$IMAGE_TAG $IMAGE_REPO_URI:latest
+  post_build:
+    commands:
+      - echo Pushing image to ECR...
+      - docker push $IMAGE_REPO_URI:$IMAGE_TAG
+      - docker push $IMAGE_REPO_URI:latest
