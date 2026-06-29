@@ -1,15 +1,38 @@
 version: 0.2
 
 env:
+  parameter-store:
+    SONAR_TOKEN: "/sonarqube/token"
+
   variables:
     IMAGE_REPO_NAME: indira-test
     IMAGE_TAG: latest
+    SONAR_HOST_URL: "http://34.196.105.22:9000"
+    SONAR_PROJECT_KEY: "indira_aws_pipeline"
 
 phases:
+  install:
+    runtime-versions:
+      java: corretto17
+    commands:
+      - echo Installing SonarScanner...
+      - wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-7.1.0.4889-linux-x64.zip
+      - unzip -q sonar-scanner-7.1.0.4889-linux-x64.zip
+      - export PATH=$PATH:$PWD/sonar-scanner-7.1.0.4889-linux-x64/bin
+
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
+      - echo Running SonarQube scan...
+      - |
+        sonar-scanner \
+          -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+          -Dsonar.sources=. \
+          -Dsonar.host.url=$SONAR_HOST_URL \
+          -Dsonar.token=$SONAR_TOKEN \
+          -Dsonar.qualitygate.wait=true
 
   build:
     commands:
